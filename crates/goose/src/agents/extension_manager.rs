@@ -9,8 +9,7 @@ use rmcp::transport::streamable_http_client::{
     AuthRequiredError, StreamableHttpClientTransportConfig, StreamableHttpError,
 };
 use rmcp::transport::{
-    ConfigureCommandExt, DynamicTransportError, SseClientTransport, StreamableHttpClientTransport,
-    TokioChildProcess,
+    ConfigureCommandExt, DynamicTransportError, StreamableHttpClientTransport, TokioChildProcess,
 };
 use std::collections::HashMap;
 use std::option::Option;
@@ -379,25 +378,14 @@ impl ExtensionManager {
         }
 
         let client: Box<dyn McpClientTrait> = match &config {
-            ExtensionConfig::Sse { uri, timeout, .. } => {
-                let transport = SseClientTransport::start(uri.to_string()).await.map_err(
-                    |transport_error| {
-                        ClientInitializeError::transport::<SseClientTransport<reqwest::Client>>(
-                            transport_error,
-                            "connect",
-                        )
-                    },
-                )?;
-                Box::new(
-                    McpClient::connect(
-                        transport,
-                        Duration::from_secs(
-                            timeout.unwrap_or(crate::config::DEFAULT_EXTENSION_TIMEOUT),
-                        ),
-                        self.provider.clone(),
-                    )
-                    .await?,
-                )
+            ExtensionConfig::Sse { .. } => {
+                // SSE transport is deprecated as of rmcp 0.11.0
+                // Return error immediately WITHOUT attempting any network connection
+                // per REQ-MCP-SSE-DEPRECATION (CLAUSE-001)
+                return Err(ExtensionError::ConfigError(
+                    "SSE transport is deprecated. Please use Streamable HTTP transport instead."
+                        .to_string(),
+                ));
             }
             ExtensionConfig::StreamableHttp {
                 uri,
@@ -1426,6 +1414,7 @@ mod tests {
                     ),
                 ],
                 next_cursor: None,
+                meta: None,
             })
         }
 
